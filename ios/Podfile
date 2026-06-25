@@ -31,5 +31,34 @@ target 'GuestBerlinSpielbankenHub' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
+
+    # Work around the Xcode 26.4 + fmt 11.0.2 consteval compile failure.
+    installer.pods_project.targets.each do |target|
+      next unless target.name == 'fmt'
+
+      target.build_configurations.each do |build_config|
+        build_config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
+      end
+    end
+
+    Dir.glob(File.join(__dir__, 'Pods', 'Target Support Files', 'fmt', 'fmt.*.xcconfig')).each do |xcconfig_path|
+      xcconfig = File.read(xcconfig_path)
+      xcconfig = xcconfig.gsub(/^CLANG_CXX_LANGUAGE_STANDARD = .+$/, 'CLANG_CXX_LANGUAGE_STANDARD = c++17')
+      File.write(xcconfig_path, xcconfig)
+    end
+
+    fmt_base_header = File.join(__dir__, 'Pods', 'fmt', 'include', 'fmt', 'base.h')
+    if File.exist?(fmt_base_header)
+      fmt_base = File.read(fmt_base_header)
+      fmt_base = fmt_base.gsub(
+        "#elif defined(__cpp_consteval)\n#  define FMT_USE_CONSTEVAL 1",
+        "#elif defined(__cpp_consteval)\n#  define FMT_USE_CONSTEVAL 0",
+      )
+      fmt_base = fmt_base.gsub(
+        "#elif FMT_GCC_VERSION >= 1002 || FMT_CLANG_VERSION >= 1101\n#  define FMT_USE_CONSTEVAL 1",
+        "#elif FMT_GCC_VERSION >= 1002 || FMT_CLANG_VERSION >= 1101\n#  define FMT_USE_CONSTEVAL 0",
+      )
+      File.write(fmt_base_header, fmt_base)
+    end
   end
 end
